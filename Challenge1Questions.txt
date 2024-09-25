@@ -1,0 +1,160 @@
+
+-- 1. What is the total amount each customer spent at the restaurant?
+|customer_id | total_per_customer |
+| A           |                 76 |
+| B           |                 74 |
+| C           |                 36
+
+ select s.customer_id, sum(m.price) as total_per_customer
+  from sales s
+  join menu m on s.product_id = m.product_id
+  group by s.customer_id;
+
+-- 2. How many days has each customer visited the restaurant?
+|customer_id | count(distinct order_date) |
++-------------+----------------------------+
+| A           |                          4 |
+| B           |                          6 |
+| C           |                          2
+
+ select s.customer_id, count(distinct order_date)
+  from sales s
+  group by s.customer_id;
+
+-- 3. What was the first item from the menu purchased by each customer?
+
+customer_id | min(m.product_name) |
++-------------+---------------------+
+| A           | curry               |
+| B           | curry               |
+| C           | ramen               
+
+ select s.customer_id, min(m.product_name)
+  from sales s
+  join menu m on s.product_id = m.product_id
+  group by s.customer_id;
+
+-- 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
+
+product_name | purchase_count |
++--------------+----------------+
+| ramen        |              8
+
+
+select m.product_name, count(s.product_id) as purchase_count
+  from sales s
+  join menu m on s.product_id = m.product_id
+  group by m.product_name
+  order by purchase_count DESC limit 1;
+
+-- 5. Which item was the most popular for each customer?
+| customer_id | product_name | purchase_count |
++-------------+--------------+----------------+
+| A           | ramen        |              3 |
+| B           | curry        |              2 |
+| B           | ramen        |              2 |
+| B           | sushi        |              2 |
+| C           | ramen        |              3
+
+select s.customer_id, m.product_name, count(s.product_id) as purchase_count
+  from sales s
+  join menu m on s.product_id = m.product_id
+  group by s.customer_id, m.product_name
+  having count(s.product_id) = (
+    select 
+      max(prod_count)
+        from (
+          select s1.customer_id, count(s1.product_id) as prod_count
+          from sales s1
+          where s1.customer_id = s.customer_id
+          group by 
+          s1.product_id
+          ) as subquery
+        )
+  order by s.customer_id;
+
+-- 6. Which item was purchased first by the customer after they became a member?
+ customer_id | product_name | order_date |
++-------------+--------------+------------+
+| B           | sushi        | 2021-01-11 |
+| B           | ramen        | 2021-02-01 |
+| B           | ramen        | 2021-01-16 |
+| A           | ramen        | 2021-01-11 |
+| A           | ramen        | 2021-01-11 |
+| A           | ramen        | 2021-01-10
+
+select s.customer_id, m.product_name, s.order_date
+from sales s
+join menu m on s.product_id = m.product_id
+join members me on s.customer_id = me.customer_id
+where join_date < order_date;
+
+
+-- 7. Which item was purchased just before the customer became a member?
+
+ customer_id | product_name | order_date |
++-------------+--------------+------------+
+| B           | sushi        | 2021-01-04 |
+| A           | sushi        | 2021-01-01 |
+| B           | curry        | 2021-01-02 |
+| B           | curry        | 2021-01-01 |
+| A           | curry        | 2021-01-01 
+
+select s.customer_id, m.product_name, s.order_date
+from sales s
+join menu m on s.product_id = m.product_id
+join members me on s.customer_id = me.customer_id
+where join_date > order_date;
+
+-- 8. What is the total items and amount spent for each member before they became a member? 
+
+customer_id | total_items | total_amount_spent |
++-------------+-------------+--------------------+
+| B           |           3 |                 40 |
+| A           |           2 |                 25 
+
+select s.customer_id, count(s.product_id) as total_items, sum(m.price) as total_amount_spent
+from sales s
+join menu m on s.product_id = m.product_id
+join members me on s.customer_id = me.customer_id
+where join_date > order_date
+group by s.customer_id;
+
+-- 9.  If each $1 spent equates to 10 points and sushi has a 2x points multiplier - how many points would each customer have?
+
+customer_id | total_points |
++-------------+--------------+
+| A           |          860 |
+| B           |          940 |
+| C           |          360
+
+select s.customer_id, sum(
+  case
+    when m.product_name = 'sushi' then m.price * 10 * 2
+    else m.price * 10
+  end
+  ) as total_points
+from sales s
+join menu m on s.product_id = m.product_id
+group by s.customer_id;
+
+-- 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi - how many points do customer A and B have at the end of January?
+
++-------------+--------------+
+| customer_id | total_points |
++-------------+--------------+
+| B           |          940 |
+| A           |         1370 |
++-------------+--------------+
+
+select s.customer_id, sum(
+  case
+    when m.product_name = 'sushi' then m.price * 10 * 2
+    when s.order_date between me.join_date and date_add(me.join_date, interval 6 day) then m.price * 10 * 2
+    else m.price * 10
+  end
+  ) as total_points
+from sales s
+join menu m on s.product_id = m.product_id
+join members me on s.customer_id = me.customer_id
+group by s.customer_id;
