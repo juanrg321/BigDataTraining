@@ -23,16 +23,19 @@
 
 -- 3. What was the first item from the menu purchased by each customer?
 
-customer_id | min(m.product_name) |
-+-------------+---------------------+
-| A           | curry               |
-| B           | curry               |
-| C           | ramen               
+A	sushi	2021-01-01
+B	curry	2021-01-01
+C	ramen	2021-01-01
 
- select s.customer_id, min(m.product_name)
-  from sales s
-  join menu m on s.product_id = m.product_id
-  group by s.customer_id;
+WITH ranked_sales AS (
+  SELECT s.customer_id, s.product_id, s.order_date, ROW_NUMBER() OVER (PARTITION BY s.customer_id
+  ORDER BY s.order_date)
+  as row_num
+    from sales s)
+select sr.customer_id, m.product_name, sr.order_date
+  from ranked_sales sr
+  join menu m on sr.product_id = m.product_id
+  where sr.row_num = 1;
 
 -- 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
 
