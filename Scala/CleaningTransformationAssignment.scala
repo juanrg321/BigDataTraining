@@ -1,11 +1,13 @@
 package itc
 
 import org.apache.spark.SparkConf
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.expressions.Window
+import org.apache.spark.sql.{SparkSession, functions}
 import org.apache.spark.sql.functions.{col, lit, lower, mean, stddev, trim}
 import org.apache.spark.sql.types.{DoubleType, StringType, StructField, StructType}
+import org.apache.spark.sql.functions._
 
-object CleaningAssignment extends App {
+object CleaningTransformationAssignment extends App {
   val sparkconf = new SparkConf()
 
   sparkconf.set("spark.app.name", "DataFrameDemo")
@@ -13,7 +15,6 @@ object CleaningAssignment extends App {
   sparkconf.set("spark.master", "local[1]")
 
   val ss = SparkSession.builder().config(sparkconf).getOrCreate()
-
   val ddlSchema =
     """
       product_number STRING,
@@ -62,5 +63,39 @@ object CleaningAssignment extends App {
     col(widthColumn).between(widthLowerBound, widthUpperBound))
   )
   // Display results of outliers
-  outliersDF.show()
+  //outliersDF.show()
+
+  val splitDF = filteredDF.withColumn("storeid", split(col("product_number"),"_").getItem(0))
+    .withColumn("productid", split(col("product_number"), "_").getItem(1))
+
+  splitDF.show()
+
+  val splitNameintoYearDF = splitDF.withColumn("year", split(col("product_name")," ").getItem(0))
+
+  splitNameintoYearDF.show()
+
+  val dfwithProductSize = splitNameintoYearDF.withColumn("product_size",
+    when(col("length") < 1000, "Small")
+      .when(col("length").between(1000, 2000), "Medium")
+      .when(col("length").between(2001, 3000), "Large")
+      .otherwise("Large")
+  )
+
+  dfwithProductSize.show()
+
+  val res1 = dfwithProductSize.groupBy("product_category")
+    .pivot("product_size")
+    .agg(count("product_number"))
+    .na.fill(0)
+
+  res1.show()
+
+  val windowSpec = Window.partitionBy("product_category")
+    .orderBy(col("length").desc)
+
+  val rankedDF = dfwithProductSize.withColumn("rank", rank().over(windowSpec))
+
+  val secondLongestDF = rankedDF.filter(col("rank") === 2)
+
+  secondLongestDF.select("product_category", "product_name", "length").show()
 }
